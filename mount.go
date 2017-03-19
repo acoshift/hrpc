@@ -3,7 +3,6 @@ package mount
 import (
 	"context"
 	"net/http"
-
 	"reflect"
 
 	"github.com/acoshift/httperror"
@@ -54,6 +53,7 @@ func (m *Mounter) Handler(req interface{}, f Func) http.Handler {
 	if typ.Kind() == reflect.Ptr {
 		typ = typ.Elem()
 	}
+	req = nil
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.Method != http.MethodPost {
 			m.c.ErrorHandler(w, r, httperror.MethodNotAllowed)
