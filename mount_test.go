@@ -19,7 +19,7 @@ type requestType struct {
 }
 
 func (req *requestType) Validate() error {
-	if req.Data < 1 {
+	if req.Data < 0 {
 		return errors.New("invalid data")
 	}
 	return nil
@@ -37,7 +37,7 @@ func TestHandler(t *testing.T) {
 		successBody.Reset()
 		successBody.WriteString("{\"data\": 1}")
 		errorBody.Reset()
-		errorBody.WriteString("{\"data\": 0}")
+		errorBody.WriteString("{\"data\": -1}")
 		invalidBody.Reset()
 		invalidBody.WriteString("invalid")
 	}
@@ -120,5 +120,24 @@ func TestHandler(t *testing.T) {
 	}
 	if !callError {
 		t.Fatalf("error not call")
+	}
+}
+
+func TestDefault(t *testing.T) {
+	m := New(Config{})
+	i := 0
+	h := m.Handler(&requestType{}, func(ctx context.Context, req interface{}) (interface{}, error) {
+		if i == 0 {
+			i++
+			return req, nil
+		}
+		return nil, errors.New("some error")
+	})
+	for i := 0; i < 2; i++ {
+		body := &bytes.Buffer{}
+		body.WriteString("{\"data\": 1}")
+		r := httptest.NewRequest(http.MethodPost, "http://localhost", body)
+		w := httptest.NewRecorder()
+		h.ServeHTTP(w, r)
 	}
 }
