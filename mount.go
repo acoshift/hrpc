@@ -49,11 +49,7 @@ type Func func(context.Context, interface{}) (interface{}, error)
 
 // Handler func
 func (m *Mounter) Handler(req interface{}, f Func) http.Handler {
-	typ := reflect.TypeOf(req)
-	if typ.Kind() == reflect.Ptr {
-		typ = typ.Elem()
-	}
-	req = nil
+	typ := reflect.Indirect(reflect.ValueOf(req)).Type()
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.Method != http.MethodPost {
 			m.c.ErrorHandler(w, r, httperror.MethodNotAllowed)
