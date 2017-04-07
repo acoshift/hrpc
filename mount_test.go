@@ -52,12 +52,8 @@ func TestHandler(t *testing.T) {
 		},
 	})
 
-	h := m.Handler(&requestType{}, func(ctx context.Context, req interface{}) (interface{}, error) {
-		r, ok := req.(*requestType)
-		if !ok {
-			t.Fatalf("invalid request type")
-		}
-		if r.Data != 1 {
+	h := m.Handler(func(ctx context.Context, req *requestType) (interface{}, error) {
+		if req.Data != 1 {
 			t.Fatalf("invalid data")
 		}
 		return map[string]int{"ok": 1}, nil
@@ -108,7 +104,7 @@ func TestHandler(t *testing.T) {
 		t.Fatalf("error not call")
 	}
 
-	h = m.Handler(&requestType{}, func(ctx context.Context, req interface{}) (interface{}, error) {
+	h = m.Handler(func(ctx context.Context, req *requestType) (interface{}, error) {
 		return nil, errors.New("some error")
 	})
 	r = httptest.NewRequest(http.MethodPost, "http://localhost", successBody)
@@ -126,7 +122,7 @@ func TestHandler(t *testing.T) {
 func TestDefault(t *testing.T) {
 	m := New(Config{})
 	i := 0
-	h := m.Handler(&requestType{}, func(ctx context.Context, req interface{}) (interface{}, error) {
+	h := m.Handler(func(ctx context.Context, req *requestType) (interface{}, error) {
 		if i == 0 {
 			i++
 			return req, nil
