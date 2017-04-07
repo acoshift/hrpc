@@ -1,7 +1,6 @@
 package mount
 
 import (
-	"context"
 	"net/http"
 	"reflect"
 
@@ -44,12 +43,29 @@ func New(config Config) *Mounter {
 	return m
 }
 
-// Func type
-type Func func(context.Context, interface{}) (interface{}, error)
-
 // Handler func
-func (m *Mounter) Handler(req interface{}, f Func) http.Handler {
-	typ := reflect.Indirect(reflect.ValueOf(req)).Type()
+func (m *Mounter) Handler(f interface{}) http.Handler {
+	fv := reflect.ValueOf(f)
+	ft := fv.Type()
+	if ft.Kind() != reflect.Func {
+		panic("f must be a function")
+	}
+	if ft.NumIn() != 2 {
+		panic("f must have 2 inputs")
+	}
+	if ft.NumOut() != 2 {
+		panic("f must have 2 outputs")
+	}
+	if ft.In(0).String() != "context.Context" {
+		panic("f input 0 must be context.Context")
+	}
+	if ft.Out(1).String() != "error" {
+		panic("f output 1 must be error")
+	}
+	typ := ft.In(1)
+	if typ.Kind() == reflect.Ptr {
+		typ = typ.Elem()
+	}
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.Method != http.MethodPost {
 			m.c.ErrorHandler(w, r, httperror.MethodNotAllowed)
@@ -68,11 +84,11 @@ func (m *Mounter) Handler(req interface{}, f Func) http.Handler {
 				return
 			}
 		}
-		res, err := f(r.Context(), req)
-		if err != nil {
+		res := fv.Call([]reflect.Value{reflect.ValueOf(r.Context()), reflect.ValueOf(req)})
+		if err, ok := res[1].Interface().(error); ok && err != nil {
 			m.c.ErrorHandler(w, r, err)
 			return
 		}
-		m.c.SuccessHandler(w, r, res)
+		m.c.SuccessHandler(w, r, res[0].Interface())
 	})
 }

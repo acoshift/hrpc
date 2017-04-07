@@ -52,12 +52,8 @@ func TestHandler(t *testing.T) {
 		},
 	})
 
-	h := m.Handler(&requestType{}, func(ctx context.Context, req interface{}) (interface{}, error) {
-		r, ok := req.(*requestType)
-		if !ok {
-			t.Fatalf("invalid request type")
-		}
-		if r.Data != 1 {
+	h := m.Handler(func(ctx context.Context, req *requestType) (interface{}, error) {
+		if req.Data != 1 {
 			t.Fatalf("invalid data")
 		}
 		return map[string]int{"ok": 1}, nil
@@ -108,7 +104,7 @@ func TestHandler(t *testing.T) {
 		t.Fatalf("error not call")
 	}
 
-	h = m.Handler(&requestType{}, func(ctx context.Context, req interface{}) (interface{}, error) {
+	h = m.Handler(func(ctx context.Context, req *requestType) (interface{}, error) {
 		return nil, errors.New("some error")
 	})
 	r = httptest.NewRequest(http.MethodPost, "http://localhost", successBody)
@@ -126,7 +122,7 @@ func TestHandler(t *testing.T) {
 func TestDefault(t *testing.T) {
 	m := New(Config{})
 	i := 0
-	h := m.Handler(&requestType{}, func(ctx context.Context, req interface{}) (interface{}, error) {
+	h := m.Handler(func(ctx context.Context, req *requestType) (interface{}, error) {
 		if i == 0 {
 			i++
 			return req, nil
@@ -140,4 +136,38 @@ func TestDefault(t *testing.T) {
 		w := httptest.NewRecorder()
 		h.ServeHTTP(w, r)
 	}
+}
+
+func TestInvalidF(t *testing.T) {
+	p := func() {
+		r := recover()
+		if r == nil {
+			t.Fatal("should panic")
+		}
+	}
+	m := New(Config{})
+	func() {
+		defer p()
+		m.Handler(1)
+	}()
+	func() {
+		defer p()
+		m.Handler(func(ctx context.Context) {})
+	}()
+	func() {
+		defer p()
+		m.Handler(func(ctx context.Context, req interface{}) {})
+	}()
+	func() {
+		defer p()
+		m.Handler(func(ctx interface{}, req interface{}) (interface{}, error) {
+			return nil, nil
+		})
+	}()
+	func() {
+		defer p()
+		m.Handler(func(ctx context.Context, req interface{}) (interface{}, interface{}) {
+			return nil, nil
+		})
+	}()
 }
