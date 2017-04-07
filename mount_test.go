@@ -137,3 +137,37 @@ func TestDefault(t *testing.T) {
 		h.ServeHTTP(w, r)
 	}
 }
+
+func TestInvalidF(t *testing.T) {
+	p := func() {
+		r := recover()
+		if r == nil {
+			t.Fatal("should panic")
+		}
+	}
+	m := New(Config{})
+	func() {
+		defer p()
+		m.Handler(1)
+	}()
+	func() {
+		defer p()
+		m.Handler(func(ctx context.Context) {})
+	}()
+	func() {
+		defer p()
+		m.Handler(func(ctx context.Context, req interface{}) {})
+	}()
+	func() {
+		defer p()
+		m.Handler(func(ctx interface{}, req interface{}) (interface{}, error) {
+			return nil, nil
+		})
+	}()
+	func() {
+		defer p()
+		m.Handler(func(ctx context.Context, req interface{}) (interface{}, interface{}) {
+			return nil, nil
+		})
+	}()
+}

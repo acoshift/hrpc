@@ -59,6 +59,9 @@ func (m *Mounter) Handler(f interface{}) http.Handler {
 	if ft.In(0).String() != "context.Context" {
 		panic("f input 0 must be context.Context")
 	}
+	if ft.Out(1).String() != "error" {
+		panic("f output 1 must be error")
+	}
 	typ := ft.In(1)
 	if typ.Kind() == reflect.Ptr {
 		typ = typ.Elem()
