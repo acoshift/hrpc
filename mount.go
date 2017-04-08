@@ -15,8 +15,8 @@ type Mounter struct {
 // Config is the mounter config
 type Config struct {
 	Binder         func(*http.Request, interface{}) error
-	SuccessHandler func(w http.ResponseWriter, r *http.Request, res interface{})
-	ErrorHandler   func(w http.ResponseWriter, r *http.Request, err error)
+	SuccessHandler func(http.ResponseWriter, *http.Request, interface{})
+	ErrorHandler   func(http.ResponseWriter, *http.Request, error)
 }
 
 // Validatable interface
@@ -28,8 +28,8 @@ type Validatable interface {
 func New(config Config) *Mounter {
 	m := &Mounter{Config{
 		Binder:         func(*http.Request, interface{}) error { return nil },
-		SuccessHandler: func(w http.ResponseWriter, r *http.Request, res interface{}) {},
-		ErrorHandler:   func(w http.ResponseWriter, r *http.Request, err error) {},
+		SuccessHandler: func(http.ResponseWriter, *http.Request, interface{}) {},
+		ErrorHandler:   func(http.ResponseWriter, *http.Request, error) {},
 	}}
 	if config.Binder != nil {
 		m.c.Binder = config.Binder
@@ -43,7 +43,12 @@ func New(config Config) *Mounter {
 	return m
 }
 
-// Handler func
+// Handler func,
+// f must be a function which have 2 inputs and 2 outputs.
+// first input must be a context.
+// second input can be anything which will pass to binder function.
+// first output must be the result which will pass to success handler.
+// second output must be an error interface which will pass to error handler if not nil.
 func (m *Mounter) Handler(f interface{}) http.Handler {
 	fv := reflect.ValueOf(f)
 	ft := fv.Type()
@@ -66,12 +71,14 @@ func (m *Mounter) Handler(f interface{}) http.Handler {
 	if typ.Kind() == reflect.Ptr {
 		typ = typ.Elem()
 	}
+
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.Method != http.MethodPost {
 			m.c.ErrorHandler(w, r, httperror.MethodNotAllowed)
 			return
 		}
-		req := reflect.New(typ).Interface()
+		rfReq := reflect.New(typ)
+		req := rfReq.Interface()
 		err := m.c.Binder(r, req)
 		if err != nil {
 			m.c.ErrorHandler(w, r, httperror.BadRequestWith(err))
@@ -84,10 +91,12 @@ func (m *Mounter) Handler(f interface{}) http.Handler {
 				return
 			}
 		}
-		res := fv.Call([]reflect.Value{reflect.ValueOf(r.Context()), reflect.ValueOf(req)})
-		if err, ok := res[1].Interface().(error); ok && err != nil {
-			m.c.ErrorHandler(w, r, err)
-			return
+		res := fv.Call([]reflect.Value{reflect.ValueOf(r.Context()), rfReq})
+		if !res[1].IsNil() {
+			if err, ok := res[1].Interface().(error); ok && err != nil {
+				m.c.ErrorHandler(w, r, err)
+				return
+			}
 		}
 		m.c.SuccessHandler(w, r, res[0].Interface())
 	})
