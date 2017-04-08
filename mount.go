@@ -44,7 +44,7 @@ func New(config Config) *Mounter {
 }
 
 // Handler func,
-// f must be a function which have 2 inputs and 2 outputs.
+// f must be a function which have at least 2 inputs and 2 outputs.
 // first input must be a context.
 // second input can be anything which will pass to binder function.
 // first output must be the result which will pass to success handler.
@@ -55,8 +55,8 @@ func (m *Mounter) Handler(f interface{}) http.Handler {
 	if ft.Kind() != reflect.Func {
 		panic("f must be a function")
 	}
-	if ft.NumIn() != 2 {
-		panic("f must have 2 inputs")
+	if ft.NumIn() < 2 {
+		panic("f must have at least 2 inputs")
 	}
 	if ft.NumOut() != 2 {
 		panic("f must have 2 outputs")
