@@ -5,6 +5,8 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"fmt"
+	"io"
 	"net/http"
 	"net/http/httptest"
 	"testing"
@@ -176,4 +178,56 @@ func TestInvalidF(t *testing.T) {
 			return nil, nil
 		})
 	}()
+}
+
+func ExampleMounter() {
+	jsonHandler := func(w http.ResponseWriter, v interface{}) {
+		err := json.NewEncoder(w).Encode(v)
+		if err != nil {
+			fmt.Fprintf(w, "encode json error; %v", err)
+		}
+	}
+
+	m := New(Config{
+		Binder: func(r *http.Request, dst interface{}) error {
+			// binder will call if f contains an interface{}
+			return json.NewDecoder(r.Body).Decode(dst)
+		},
+		SuccessHandler: func(w http.ResponseWriter, r *http.Request, res interface{}) {
+			// success handler will call if f returns an interface{}
+			jsonHandler(w, res)
+		},
+		ErrorHandler: func(w http.ResponseWriter, r *http.Request, err error) {
+			// error handler will fall if f returns an error
+			res := &struct {
+				Error string `json:"error"`
+			}{err.Error()}
+			jsonHandler(w, res)
+		},
+	})
+
+	http.Handle("/user.get", m.Handler(func(ctx context.Context, req *struct {
+		ID string `json:"id"`
+	}) (map[string]string, error) {
+		return map[string]string{
+			"user_id":   req.ID,
+			"user_name": "User " + req.ID,
+		}, nil
+	}))
+	// $ curl -X POST -d '{"id":"123"}' http://localhost:8080/user.get
+	// {"user_id":"123","user_name":"User 123"}
+
+	http.Handle("/upload", m.Handler(func(r *http.Request) error {
+		buf := &bytes.Buffer{}
+		_, err := io.Copy(buf, r.Body)
+		if err != nil {
+			return err
+		}
+		fmt.Printf("upload data: %s\n", buf.String())
+		return nil
+	}))
+	// $ echo "test data" | curl -X POST -d "@-" http://localhost:8080/upload
+	// upload data: test data
+
+	http.ListenAndServe(":8080", nil)
 }
