@@ -81,6 +81,15 @@ func TestHandler(t *testing.T) {
 		}
 	}
 
+	mustNothing := func() {
+		if callSuccess {
+			t.Fatalf("success should not be called")
+		}
+		if callError {
+			t.Fatalf("error should not be called")
+		}
+	}
+
 	reset()
 	r = httptest.NewRequest(http.MethodPost, "http://localhost", successBody)
 	h.ServeHTTP(w, r)
@@ -108,6 +117,20 @@ func TestHandler(t *testing.T) {
 	reset()
 	h.ServeHTTP(w, r)
 	mustError()
+
+	h = m.Handler(func(r *http.Request, req *requestType) (interface{}, error) {
+		return map[string]int{"ok": 1}, nil
+	})
+	r = httptest.NewRequest(http.MethodPost, "http://localhost", successBody)
+	reset()
+	h.ServeHTTP(w, r)
+	mustSuccess()
+
+	h = m.Handler(func(w http.ResponseWriter, r *http.Request) {})
+	r = httptest.NewRequest(http.MethodPost, "http://localhost", successBody)
+	reset()
+	h.ServeHTTP(w, r)
+	mustNothing()
 }
 
 func TestDefault(t *testing.T) {
@@ -140,14 +163,6 @@ func TestInvalidF(t *testing.T) {
 	func() {
 		defer p()
 		m.Handler(1)
-	}()
-	func() {
-		defer p()
-		m.Handler(func(ctx context.Context) {})
-	}()
-	func() {
-		defer p()
-		m.Handler(func(ctx context.Context, req interface{}) {})
 	}()
 	func() {
 		defer p()

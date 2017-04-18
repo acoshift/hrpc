@@ -43,6 +43,31 @@ func New(config Config) *Mounter {
 	return m
 }
 
+type mapIndex int
+
+const (
+	_                mapIndex = iota
+	miContext                 // context.Context
+	miRequest                 // *http.Request
+	miResponseWriter          // http.ResponseWriter
+	miInterface               // interface{}
+	miError                   // error
+)
+
+const (
+	strContext        = "context.Context"
+	strRequest        = "*http.Request"
+	strResponseWriter = "http.ResponseWriter"
+	strError          = "error"
+)
+
+func setOrPanic(m map[mapIndex]int, k mapIndex, v int) {
+	if _, exists := m[k]; exists {
+		panic("mount: duplicate input type")
+	}
+	m[k] = v
+}
+
 // Handler func,
 // f must be a function which have at least 2 inputs and 2 outputs.
 // first input must be a context.
@@ -53,23 +78,43 @@ func (m *Mounter) Handler(f interface{}) http.Handler {
 	fv := reflect.ValueOf(f)
 	ft := fv.Type()
 	if ft.Kind() != reflect.Func {
-		panic("f must be a function")
+		panic("mount: f must be a function")
 	}
-	if ft.NumIn() < 2 {
-		panic("f must have at least 2 inputs")
+
+	// build mapIn
+	numIn := ft.NumIn()
+	mapIn := make(map[mapIndex]int)
+	for i := 0; i < numIn; i++ {
+		switch ft.In(i).String() {
+		case strContext:
+			setOrPanic(mapIn, miContext, i)
+		case strRequest:
+			setOrPanic(mapIn, miRequest, i)
+		case strResponseWriter:
+			setOrPanic(mapIn, miResponseWriter, i)
+		default:
+			setOrPanic(mapIn, miInterface, i)
+		}
 	}
-	if ft.NumOut() != 2 {
-		panic("f must have 2 outputs")
+
+	// build mapOut
+	numOut := ft.NumOut()
+	mapOut := make(map[mapIndex]int)
+	for i := 0; i < numOut; i++ {
+		switch ft.Out(i).String() {
+		case strError:
+			setOrPanic(mapOut, miError, i)
+		default:
+			setOrPanic(mapOut, miInterface, i)
+		}
 	}
-	if ft.In(0).String() != "context.Context" {
-		panic("f input 0 must be context.Context")
-	}
-	if ft.Out(1).String() != "error" {
-		panic("f output 1 must be error")
-	}
-	typ := ft.In(1)
-	if typ.Kind() == reflect.Ptr {
-		typ = typ.Elem()
+
+	var typ reflect.Type
+	if i, ok := mapIn[miInterface]; ok {
+		typ = ft.In(i)
+		if typ.Kind() == reflect.Ptr {
+			typ = typ.Elem()
+		}
 	}
 
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -77,27 +122,54 @@ func (m *Mounter) Handler(f interface{}) http.Handler {
 			m.c.ErrorHandler(w, r, httperror.MethodNotAllowed)
 			return
 		}
-		rfReq := reflect.New(typ)
-		req := rfReq.Interface()
-		err := m.c.Binder(r, req)
-		if err != nil {
-			m.c.ErrorHandler(w, r, httperror.BadRequestWith(err))
-			return
+
+		vIn := make([]reflect.Value, numIn)
+		// inject context
+		if i, ok := mapIn[miContext]; ok {
+			vIn[i] = reflect.ValueOf(r.Context())
 		}
-		if req, ok := req.(Validatable); ok {
-			err = req.Validate()
+		// inject request interface
+		if i, ok := mapIn[miInterface]; ok {
+			rfReq := reflect.New(typ)
+			req := rfReq.Interface()
+			err := m.c.Binder(r, req)
 			if err != nil {
 				m.c.ErrorHandler(w, r, httperror.BadRequestWith(err))
 				return
 			}
+			if req, ok := req.(Validatable); ok {
+				err = req.Validate()
+				if err != nil {
+					m.c.ErrorHandler(w, r, httperror.BadRequestWith(err))
+					return
+				}
+			}
+			vIn[i] = rfReq
 		}
-		res := fv.Call([]reflect.Value{reflect.ValueOf(r.Context()), rfReq})
-		if !res[1].IsNil() {
-			if err, ok := res[1].Interface().(error); ok && err != nil {
-				m.c.ErrorHandler(w, r, err)
-				return
+		// inject request
+		if i, ok := mapIn[miRequest]; ok {
+			vIn[i] = reflect.ValueOf(r)
+		}
+		// inject response writer
+		if i, ok := mapIn[miResponseWriter]; ok {
+			vIn[i] = reflect.ValueOf(w)
+		}
+
+		vOut := fv.Call(vIn)
+		// check error
+		if i, ok := mapOut[miError]; ok {
+			if vErr := vOut[i]; !vErr.IsNil() {
+				if err, ok := vErr.Interface().(error); ok && err != nil {
+					m.c.ErrorHandler(w, r, err)
+					return
+				}
 			}
 		}
-		m.c.SuccessHandler(w, r, res[0].Interface())
+		// check response
+		if i, ok := mapOut[miInterface]; ok {
+			m.c.SuccessHandler(w, r, vOut[i].Interface())
+		}
+
+		// if f is not return response, it may already call from native response writer
 	})
 }
