@@ -190,15 +190,15 @@ func ExampleMounter() {
 
 	m := New(Config{
 		Binder: func(r *http.Request, dst interface{}) error {
-			// binder will call if f contains an interface{}
+			// binder will called if f contains an interface{}
 			return json.NewDecoder(r.Body).Decode(dst)
 		},
 		SuccessHandler: func(w http.ResponseWriter, r *http.Request, res interface{}) {
-			// success handler will call if f returns an interface{}
+			// success handler will called if f returns an interface{}
 			jsonHandler(w, res)
 		},
 		ErrorHandler: func(w http.ResponseWriter, r *http.Request, err error) {
-			// error handler will fall if f returns an error
+			// error handler will called if f returns an error
 			res := &struct {
 				Error string `json:"error"`
 			}{err.Error()}
