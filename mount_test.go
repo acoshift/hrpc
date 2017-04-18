@@ -31,6 +31,9 @@ func TestHandler(t *testing.T) {
 	errorBody := &bytes.Buffer{}
 	invalidBody := &bytes.Buffer{}
 
+	var r *http.Request
+	var w *httptest.ResponseRecorder
+
 	reset := func() {
 		callSuccess = false
 		callError = false
@@ -40,6 +43,7 @@ func TestHandler(t *testing.T) {
 		errorBody.WriteString("{\"data\": -1}")
 		invalidBody.Reset()
 		invalidBody.WriteString("invalid")
+		w = httptest.NewRecorder()
 	}
 
 	m := New(Config{
@@ -59,64 +63,51 @@ func TestHandler(t *testing.T) {
 		return map[string]int{"ok": 1}, nil
 	})
 
-	r := httptest.NewRequest(http.MethodPost, "http://localhost", successBody)
-	w := httptest.NewRecorder()
+	mustSuccess := func() {
+		if !callSuccess {
+			t.Fatalf("success not call")
+		}
+		if callError {
+			t.Fatalf("error should not be called")
+		}
+	}
+
+	mustError := func() {
+		if callSuccess {
+			t.Fatalf("success should not be called")
+		}
+		if !callError {
+			t.Fatalf("error not call")
+		}
+	}
 
 	reset()
+	r = httptest.NewRequest(http.MethodPost, "http://localhost", successBody)
 	h.ServeHTTP(w, r)
-	if !callSuccess {
-		t.Fatalf("success not call")
-	}
-	if callError {
-		t.Fatalf("error should not be called")
-	}
+	mustSuccess()
 
 	reset()
 	r = httptest.NewRequest(http.MethodGet, "http://localhost", nil)
-	w = httptest.NewRecorder()
 	h.ServeHTTP(w, r)
-	if callSuccess {
-		t.Fatalf("success should not be called")
-	}
-	if !callError {
-		t.Fatalf("error not call")
-	}
+	mustError()
 
 	reset()
 	r = httptest.NewRequest(http.MethodPost, "http://localhost", errorBody)
-	w = httptest.NewRecorder()
 	h.ServeHTTP(w, r)
-	if callSuccess {
-		t.Fatalf("success should not be called")
-	}
-	if !callError {
-		t.Fatalf("error not call")
-	}
+	mustError()
 
 	reset()
 	r = httptest.NewRequest(http.MethodPost, "http://localhost", invalidBody)
-	w = httptest.NewRecorder()
 	h.ServeHTTP(w, r)
-	if callSuccess {
-		t.Fatalf("success should not be called")
-	}
-	if !callError {
-		t.Fatalf("error not call")
-	}
+	mustError()
 
 	h = m.Handler(func(ctx context.Context, req *requestType) (interface{}, error) {
 		return nil, errors.New("some error")
 	})
 	r = httptest.NewRequest(http.MethodPost, "http://localhost", successBody)
-	w = httptest.NewRecorder()
 	reset()
 	h.ServeHTTP(w, r)
-	if callSuccess {
-		t.Fatalf("success should not be called")
-	}
-	if !callError {
-		t.Fatalf("error not call")
-	}
+	mustError()
 }
 
 func TestDefault(t *testing.T) {
