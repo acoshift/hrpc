@@ -85,7 +85,15 @@ func (m *Mounter) Handler(f interface{}) http.Handler {
 	numIn := ft.NumIn()
 	mapIn := make(map[mapIndex]int)
 	for i := 0; i < numIn; i++ {
-		switch ft.In(i).String() {
+		fi := ft.In(i)
+
+		// assume this is grpc call options
+		if fi.Kind() == reflect.Slice && i == numIn-1 {
+			numIn--
+			break
+		}
+
+		switch fi.String() {
 		case strContext:
 			setOrPanic(mapIn, miContext, i)
 		case strRequest:

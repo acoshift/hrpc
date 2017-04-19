@@ -133,6 +133,15 @@ func TestHandler(t *testing.T) {
 	reset()
 	h.ServeHTTP(w, r)
 	mustNothing()
+
+	// grpc style
+	h = m.Handler(func(ctx context.Context, req *requestType, opts ...interface{}) (interface{}, error) {
+		return map[string]string{"ok": "1"}, nil
+	})
+	r = httptest.NewRequest(http.MethodPost, "http://localhost", successBody)
+	reset()
+	h.ServeHTTP(w, r)
+	mustSuccess()
 }
 
 func TestDefault(t *testing.T) {
