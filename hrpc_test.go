@@ -191,28 +191,21 @@ func TestInvalidF(t *testing.T) {
 }
 
 func ExampleManager() {
-	jsonHandler := func(w http.ResponseWriter, v interface{}) {
-		err := json.NewEncoder(w).Encode(v)
-		if err != nil {
-			fmt.Fprintf(w, "encode json error; %v", err)
-		}
-	}
-
 	m := New(Config{
 		RequestDecoder: func(r *http.Request, dst interface{}) error {
-			// RequestDecoder will called if f contains an interface{}
 			return json.NewDecoder(r.Body).Decode(dst)
 		},
 		ResponseEncoder: func(w http.ResponseWriter, r *http.Request, res interface{}) {
-			// success handler will called if f returns an interface{}
-			jsonHandler(w, res)
+			w.Header().Set("Content-Type", "application/json; charset=utf-8")
+			json.NewEncoder(w).Encode(res)
 		},
 		ErrorEncoder: func(w http.ResponseWriter, r *http.Request, err error) {
-			// error handler will called if f returns an error
 			res := &struct {
 				Error string `json:"error"`
 			}{err.Error()}
-			jsonHandler(w, res)
+			w.Header().Set("Content-Type", "application/json; charset=utf-8")
+			w.WriteHeader(http.StatusInternalServerError)
+			json.NewEncoder(w).Encode(res)
 		},
 		Validate: true,
 	})
