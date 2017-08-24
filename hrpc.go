@@ -17,6 +17,7 @@ type Config struct {
 	RequestDecoder  func(*http.Request, interface{}) error
 	ResponseEncoder func(http.ResponseWriter, *http.Request, interface{})
 	ErrorEncoder    func(http.ResponseWriter, *http.Request, error)
+	Validate        bool // set to true to validate request after decode using Validatable interface
 }
 
 // Validatable interface
@@ -26,19 +27,15 @@ type Validatable interface {
 
 // New creates new manager
 func New(config Config) *Manager {
-	m := &Manager{Config{
-		RequestDecoder:  func(*http.Request, interface{}) error { return nil },
-		ResponseEncoder: func(http.ResponseWriter, *http.Request, interface{}) {},
-		ErrorEncoder:    func(http.ResponseWriter, *http.Request, error) {},
-	}}
-	if config.RequestDecoder != nil {
-		m.c.RequestDecoder = config.RequestDecoder
+	m := &Manager{config}
+	if config.RequestDecoder == nil {
+		m.c.RequestDecoder = func(*http.Request, interface{}) error { return nil }
 	}
-	if config.ResponseEncoder != nil {
-		m.c.ResponseEncoder = config.ResponseEncoder
+	if config.ResponseEncoder == nil {
+		m.c.ResponseEncoder = func(http.ResponseWriter, *http.Request, interface{}) {}
 	}
-	if config.ErrorEncoder != nil {
-		m.c.ErrorEncoder = config.ErrorEncoder
+	if config.ErrorEncoder == nil {
+		m.c.ErrorEncoder = func(http.ResponseWriter, *http.Request, error) {}
 	}
 	return m
 }
@@ -140,11 +137,14 @@ func (m *Manager) Handler(f interface{}) http.Handler {
 				m.c.ErrorEncoder(w, r, httperror.BadRequestWith(err))
 				return
 			}
-			if req, ok := req.(Validatable); ok {
-				err = req.Validate()
-				if err != nil {
-					m.c.ErrorEncoder(w, r, httperror.BadRequestWith(err))
-					return
+
+			if m.c.Validate {
+				if req, ok := req.(Validatable); ok {
+					err = req.Validate()
+					if err != nil {
+						m.c.ErrorEncoder(w, r, httperror.BadRequestWith(err))
+						return
+					}
 				}
 			}
 			vIn[i] = rfReq

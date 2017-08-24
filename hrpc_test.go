@@ -56,6 +56,7 @@ func TestHandler(t *testing.T) {
 		ErrorEncoder: func(w http.ResponseWriter, r *http.Request, err error) {
 			callError = true
 		},
+		Validate: true,
 	})
 
 	h := m.Handler(func(ctx context.Context, req *requestType) (interface{}, error) {
@@ -213,6 +214,7 @@ func ExampleManager() {
 			}{err.Error()}
 			jsonHandler(w, res)
 		},
+		Validate: true,
 	})
 
 	http.Handle("/user.get", m.Handler(func(ctx context.Context, req *struct {
