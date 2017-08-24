@@ -58,7 +58,7 @@ const (
 
 func setOrPanic(m map[mapIndex]int, k mapIndex, v int) {
 	if _, exists := m[k]; exists {
-		panic("mount: duplicate input type")
+		panic("hrpc: duplicate input type")
 	}
 	m[k] = v
 }
@@ -73,7 +73,7 @@ func (m *Manager) Handler(f interface{}) http.Handler {
 	fv := reflect.ValueOf(f)
 	ft := fv.Type()
 	if ft.Kind() != reflect.Func {
-		panic("mount: f must be a function")
+		panic("hrpc: f must be a function")
 	}
 
 	// build mapIn
