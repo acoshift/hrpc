@@ -12,7 +12,7 @@ import (
 	"testing"
 )
 
-func jsonBinder(r *http.Request, dst interface{}) error {
+func jsonRequestDecoder(r *http.Request, dst interface{}) error {
 	return json.NewDecoder(r.Body).Decode(dst)
 }
 
@@ -49,11 +49,11 @@ func TestHandler(t *testing.T) {
 	}
 
 	m := New(Config{
-		Binder: jsonBinder,
-		SuccessHandler: func(w http.ResponseWriter, r *http.Request, res interface{}) {
+		RequestDecoder: jsonRequestDecoder,
+		ResponseEncoder: func(w http.ResponseWriter, r *http.Request, res interface{}) {
 			callSuccess = true
 		},
-		ErrorHandler: func(w http.ResponseWriter, r *http.Request, err error) {
+		ErrorEncoder: func(w http.ResponseWriter, r *http.Request, err error) {
 			callError = true
 		},
 	})
@@ -198,15 +198,15 @@ func ExampleMounter() {
 	}
 
 	m := New(Config{
-		Binder: func(r *http.Request, dst interface{}) error {
-			// binder will called if f contains an interface{}
+		RequestDecoder: func(r *http.Request, dst interface{}) error {
+			// RequestDecoder will called if f contains an interface{}
 			return json.NewDecoder(r.Body).Decode(dst)
 		},
-		SuccessHandler: func(w http.ResponseWriter, r *http.Request, res interface{}) {
+		ResponseEncoder: func(w http.ResponseWriter, r *http.Request, res interface{}) {
 			// success handler will called if f returns an interface{}
 			jsonHandler(w, res)
 		},
-		ErrorHandler: func(w http.ResponseWriter, r *http.Request, err error) {
+		ErrorEncoder: func(w http.ResponseWriter, r *http.Request, err error) {
 			// error handler will called if f returns an error
 			res := &struct {
 				Error string `json:"error"`

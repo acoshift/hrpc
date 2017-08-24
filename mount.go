@@ -14,9 +14,9 @@ type Mounter struct {
 
 // Config is the mounter config
 type Config struct {
-	Binder         func(*http.Request, interface{}) error
-	SuccessHandler func(http.ResponseWriter, *http.Request, interface{})
-	ErrorHandler   func(http.ResponseWriter, *http.Request, error)
+	RequestDecoder  func(*http.Request, interface{}) error
+	ResponseEncoder func(http.ResponseWriter, *http.Request, interface{})
+	ErrorEncoder    func(http.ResponseWriter, *http.Request, error)
 }
 
 // Validatable interface
@@ -27,18 +27,18 @@ type Validatable interface {
 // New creates new mounter
 func New(config Config) *Mounter {
 	m := &Mounter{Config{
-		Binder:         func(*http.Request, interface{}) error { return nil },
-		SuccessHandler: func(http.ResponseWriter, *http.Request, interface{}) {},
-		ErrorHandler:   func(http.ResponseWriter, *http.Request, error) {},
+		RequestDecoder:  func(*http.Request, interface{}) error { return nil },
+		ResponseEncoder: func(http.ResponseWriter, *http.Request, interface{}) {},
+		ErrorEncoder:    func(http.ResponseWriter, *http.Request, error) {},
 	}}
-	if config.Binder != nil {
-		m.c.Binder = config.Binder
+	if config.RequestDecoder != nil {
+		m.c.RequestDecoder = config.RequestDecoder
 	}
-	if config.SuccessHandler != nil {
-		m.c.SuccessHandler = config.SuccessHandler
+	if config.ResponseEncoder != nil {
+		m.c.ResponseEncoder = config.ResponseEncoder
 	}
-	if config.ErrorHandler != nil {
-		m.c.ErrorHandler = config.ErrorHandler
+	if config.ErrorEncoder != nil {
+		m.c.ErrorEncoder = config.ErrorEncoder
 	}
 	return m
 }
@@ -71,7 +71,7 @@ func setOrPanic(m map[mapIndex]int, k mapIndex, v int) {
 // Handler func,
 // f must be a function which have at least 2 inputs and 2 outputs.
 // first input must be a context.
-// second input can be anything which will pass to binder function.
+// second input can be anything which will pass to RequestDecoder function.
 // first output must be the result which will pass to success handler.
 // second output must be an error interface which will pass to error handler if not nil.
 func (m *Mounter) Handler(f interface{}) http.Handler {
@@ -127,7 +127,7 @@ func (m *Mounter) Handler(f interface{}) http.Handler {
 
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.Method != http.MethodPost {
-			m.c.ErrorHandler(w, r, httperror.MethodNotAllowed)
+			m.c.ErrorEncoder(w, r, httperror.MethodNotAllowed)
 			return
 		}
 
@@ -140,15 +140,15 @@ func (m *Mounter) Handler(f interface{}) http.Handler {
 		if i, ok := mapIn[miInterface]; ok {
 			rfReq := reflect.New(typ)
 			req := rfReq.Interface()
-			err := m.c.Binder(r, req)
+			err := m.c.RequestDecoder(r, req)
 			if err != nil {
-				m.c.ErrorHandler(w, r, httperror.BadRequestWith(err))
+				m.c.ErrorEncoder(w, r, httperror.BadRequestWith(err))
 				return
 			}
 			if req, ok := req.(Validatable); ok {
 				err = req.Validate()
 				if err != nil {
-					m.c.ErrorHandler(w, r, httperror.BadRequestWith(err))
+					m.c.ErrorEncoder(w, r, httperror.BadRequestWith(err))
 					return
 				}
 			}
@@ -168,14 +168,14 @@ func (m *Mounter) Handler(f interface{}) http.Handler {
 		if i, ok := mapOut[miError]; ok {
 			if vErr := vOut[i]; !vErr.IsNil() {
 				if err, ok := vErr.Interface().(error); ok && err != nil {
-					m.c.ErrorHandler(w, r, err)
+					m.c.ErrorEncoder(w, r, err)
 					return
 				}
 			}
 		}
 		// check response
 		if i, ok := mapOut[miInterface]; ok {
-			m.c.SuccessHandler(w, r, vOut[i].Interface())
+			m.c.ResponseEncoder(w, r, vOut[i].Interface())
 		}
 
 		// if f is not return response, it may already call from native response writer
