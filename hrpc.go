@@ -7,12 +7,12 @@ import (
 	"github.com/acoshift/httperror"
 )
 
-// Mounter type
-type Mounter struct {
+// Manager type
+type Manager struct {
 	c Config
 }
 
-// Config is the mounter config
+// Config is the hrpc config
 type Config struct {
 	RequestDecoder  func(*http.Request, interface{}) error
 	ResponseEncoder func(http.ResponseWriter, *http.Request, interface{})
@@ -24,9 +24,9 @@ type Validatable interface {
 	Validate() error
 }
 
-// New creates new mounter
-func New(config Config) *Mounter {
-	m := &Mounter{Config{
+// New creates new manager
+func New(config Config) *Manager {
+	m := &Manager{Config{
 		RequestDecoder:  func(*http.Request, interface{}) error { return nil },
 		ResponseEncoder: func(http.ResponseWriter, *http.Request, interface{}) {},
 		ErrorEncoder:    func(http.ResponseWriter, *http.Request, error) {},
@@ -74,7 +74,7 @@ func setOrPanic(m map[mapIndex]int, k mapIndex, v int) {
 // second input can be anything which will pass to RequestDecoder function.
 // first output must be the result which will pass to success handler.
 // second output must be an error interface which will pass to error handler if not nil.
-func (m *Mounter) Handler(f interface{}) http.Handler {
+func (m *Manager) Handler(f interface{}) http.Handler {
 	fv := reflect.ValueOf(f)
 	ft := fv.Type()
 	if ft.Kind() != reflect.Func {

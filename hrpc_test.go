@@ -189,7 +189,7 @@ func TestInvalidF(t *testing.T) {
 	}()
 }
 
-func ExampleMounter() {
+func ExampleManager() {
 	jsonHandler := func(w http.ResponseWriter, v interface{}) {
 		err := json.NewEncoder(w).Encode(v)
 		if err != nil {
