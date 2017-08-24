@@ -3,8 +3,6 @@ package hrpc
 import (
 	"net/http"
 	"reflect"
-
-	"github.com/acoshift/httperror"
 )
 
 // Manager type
@@ -134,7 +132,7 @@ func (m *Manager) Handler(f interface{}) http.Handler {
 			req := rfReq.Interface()
 			err := m.c.RequestDecoder(r, req)
 			if err != nil {
-				m.c.ErrorEncoder(w, r, httperror.BadRequestWith(err))
+				m.c.ErrorEncoder(w, r, err)
 				return
 			}
 
@@ -142,7 +140,7 @@ func (m *Manager) Handler(f interface{}) http.Handler {
 				if req, ok := req.(Validatable); ok {
 					err = req.Validate()
 					if err != nil {
-						m.c.ErrorEncoder(w, r, httperror.BadRequestWith(err))
+						m.c.ErrorEncoder(w, r, err)
 						return
 					}
 				}
