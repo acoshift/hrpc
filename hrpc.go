@@ -126,11 +126,6 @@ func (m *Manager) Handler(f interface{}) http.Handler {
 	}
 
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		if r.Method != http.MethodPost {
-			m.c.ErrorEncoder(w, r, httperror.MethodNotAllowed)
-			return
-		}
-
 		vIn := make([]reflect.Value, numIn)
 		// inject context
 		if i, ok := mapIn[miContext]; ok {
