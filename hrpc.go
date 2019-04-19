@@ -5,37 +5,47 @@ import (
 	"reflect"
 )
 
-// Manager type
+// Decoder is the request decoder
+type Decoder func(*http.Request, interface{}) error
+
+// Encoder is the response encoder
+type Encoder func(http.ResponseWriter, *http.Request, interface{})
+
+// ErrorEncoder is the error response encoder
+type ErrorEncoder func(http.ResponseWriter, *http.Request, error)
+
+// Manager is the hrpc manager
 type Manager struct {
-	c Config
+	Decoder      Decoder
+	Encoder      Encoder
+	ErrorEncoder ErrorEncoder
+	Validate     bool // set to true to validate request after decode using Validatable interface
 }
 
-// Config is the hrpc config
-type Config struct {
-	RequestDecoder  func(*http.Request, interface{}) error
-	ResponseEncoder func(http.ResponseWriter, *http.Request, interface{})
-	ErrorEncoder    func(http.ResponseWriter, *http.Request, error)
-	Validate        bool // set to true to validate request after decode using Validatable interface
+func (m *Manager) decoder() Decoder {
+	if m.Decoder == nil {
+		return func(*http.Request, interface{}) error { return nil }
+	}
+	return m.Decoder
+}
+
+func (m *Manager) encoder() Encoder {
+	if m.Encoder == nil {
+		return func(http.ResponseWriter, *http.Request, interface{}) {}
+	}
+	return m.Encoder
+}
+
+func (m *Manager) errorEncoder() ErrorEncoder {
+	if m.ErrorEncoder == nil {
+		return func(http.ResponseWriter, *http.Request, error) {}
+	}
+	return m.ErrorEncoder
 }
 
 // Validatable interface
 type Validatable interface {
-	Validate() error
-}
-
-// New creates new manager
-func New(config Config) *Manager {
-	m := &Manager{config}
-	if config.RequestDecoder == nil {
-		m.c.RequestDecoder = func(*http.Request, interface{}) error { return nil }
-	}
-	if config.ResponseEncoder == nil {
-		m.c.ResponseEncoder = func(http.ResponseWriter, *http.Request, interface{}) {}
-	}
-	if config.ErrorEncoder == nil {
-		m.c.ErrorEncoder = func(http.ResponseWriter, *http.Request, error) {}
-	}
-	return m
+	Valid() error
 }
 
 type mapIndex int
@@ -120,6 +130,10 @@ func (m *Manager) Handler(f interface{}) http.Handler {
 		}
 	}
 
+	encoder := m.encoder()
+	decoder := m.decoder()
+	errorEncoder := m.errorEncoder()
+
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		vIn := make([]reflect.Value, numIn)
 		// inject context
@@ -130,17 +144,17 @@ func (m *Manager) Handler(f interface{}) http.Handler {
 		if i, ok := mapIn[miInterface]; ok {
 			rfReq := reflect.New(typ)
 			req := rfReq.Interface()
-			err := m.c.RequestDecoder(r, req)
+			err := decoder(r, req)
 			if err != nil {
-				m.c.ErrorEncoder(w, r, err)
+				errorEncoder(w, r, err)
 				return
 			}
 
-			if m.c.Validate {
+			if m.Validate {
 				if req, ok := req.(Validatable); ok {
-					err = req.Validate()
+					err = req.Valid()
 					if err != nil {
-						m.c.ErrorEncoder(w, r, err)
+						errorEncoder(w, r, err)
 						return
 					}
 				}
@@ -161,14 +175,14 @@ func (m *Manager) Handler(f interface{}) http.Handler {
 		if i, ok := mapOut[miError]; ok {
 			if vErr := vOut[i]; !vErr.IsNil() {
 				if err, ok := vErr.Interface().(error); ok && err != nil {
-					m.c.ErrorEncoder(w, r, err)
+					errorEncoder(w, r, err)
 					return
 				}
 			}
 		}
 		// check response
 		if i, ok := mapOut[miInterface]; ok {
-			m.c.ResponseEncoder(w, r, vOut[i].Interface())
+			encoder(w, r, vOut[i].Interface())
 		}
 
 		// if f is not return response, it may already call from native response writer
