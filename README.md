@@ -28,11 +28,11 @@ Convert RPC style function into http.Handler
 ### Create new hrpc Manager
 
 ```go
-m := hrpc.New(hrpc.Config{
-  RequestDecoder: func(r *http.Request, dst interface{}) error {
+m := hrpc.Manager{
+  Decoder: func(r *http.Request, dst interface{}) error {
     return json.NewDecoder(r.Body).Decode(dst)
   },
-  ResponseEncoder: func(w http.ResponseWriter, r *http.Request, res interface{}) {
+  Encoder: func(w http.ResponseWriter, r *http.Request, res interface{}) {
     w.Header().Set("Content-Type", "application/json; charset=utf-8")
     json.NewEncoder(w).Encode(res)
   },
@@ -45,7 +45,7 @@ m := hrpc.New(hrpc.Config{
     json.NewEncoder(w).Encode(res)
   },
   Validate: true,
-})
+}
 ```
 
 ### RPC style function
@@ -53,6 +53,14 @@ m := hrpc.New(hrpc.Config{
 ```go
 type UserRequest struct {
   ID int `json:"id"`
+}
+
+func (req *UserRequest) Valid() error {
+	// Valid will be called when decode, if set validate to true
+	if req.ID <= 0 {
+		return fmt.Errorf("invalid id")
+	}
+	return nil
 }
 
 type UserResponse struct {

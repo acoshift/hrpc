@@ -12,7 +12,7 @@ import (
 	"testing"
 )
 
-func jsonRequestDecoder(r *http.Request, dst interface{}) error {
+func jsonDecoder(r *http.Request, dst interface{}) error {
 	return json.NewDecoder(r.Body).Decode(dst)
 }
 
@@ -20,7 +20,7 @@ type requestType struct {
 	Data int
 }
 
-func (req *requestType) Validate() error {
+func (req *requestType) Valid() error {
 	if req.Data < 0 {
 		return errors.New("invalid data")
 	}
@@ -48,16 +48,16 @@ func TestHandler(t *testing.T) {
 		w = httptest.NewRecorder()
 	}
 
-	m := New(Config{
-		RequestDecoder: jsonRequestDecoder,
-		ResponseEncoder: func(w http.ResponseWriter, r *http.Request, res interface{}) {
+	m := Manager{
+		Decoder: jsonDecoder,
+		Encoder: func(w http.ResponseWriter, r *http.Request, res interface{}) {
 			callSuccess = true
 		},
 		ErrorEncoder: func(w http.ResponseWriter, r *http.Request, err error) {
 			callError = true
 		},
 		Validate: true,
-	})
+	}
 
 	h := m.Handler(func(ctx context.Context, req *requestType) (interface{}, error) {
 		if req.Data != 1 {
@@ -146,7 +146,7 @@ func TestHandler(t *testing.T) {
 }
 
 func TestDefault(t *testing.T) {
-	m := New(Config{})
+	m := Manager{}
 	i := 0
 	h := m.Handler(func(ctx context.Context, req *requestType) (interface{}, error) {
 		if i == 0 {
@@ -171,7 +171,7 @@ func TestInvalidF(t *testing.T) {
 			t.Fatal("should panic")
 		}
 	}
-	m := New(Config{})
+	m := Manager{}
 	func() {
 		defer p()
 		m.Handler(1)
@@ -191,11 +191,11 @@ func TestInvalidF(t *testing.T) {
 }
 
 func ExampleManager() {
-	m := New(Config{
-		RequestDecoder: func(r *http.Request, dst interface{}) error {
+	m := Manager{
+		Decoder: func(r *http.Request, dst interface{}) error {
 			return json.NewDecoder(r.Body).Decode(dst)
 		},
-		ResponseEncoder: func(w http.ResponseWriter, r *http.Request, res interface{}) {
+		Encoder: func(w http.ResponseWriter, r *http.Request, res interface{}) {
 			w.Header().Set("Content-Type", "application/json; charset=utf-8")
 			json.NewEncoder(w).Encode(res)
 		},
@@ -208,7 +208,7 @@ func ExampleManager() {
 			json.NewEncoder(w).Encode(res)
 		},
 		Validate: true,
-	})
+	}
 
 	http.Handle("/user.get", m.Handler(func(ctx context.Context, req *struct {
 		ID string `json:"id"`
