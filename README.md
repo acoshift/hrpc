@@ -7,10 +7,6 @@
 
 Convert RPC style function into http.Handler
 
-## Install
-
-`go get -u github.com/acoshift/hrpc`
-
 ## Support input types
 
 - context.Context
@@ -23,28 +19,32 @@ Convert RPC style function into http.Handler
 - interface{}
 - error
 
-## Example
+## Usage
+
+```go
+import "github.com/acoshift/hrpc/v3"
+```
 
 ### Create new hrpc Manager
 
 ```go
 m := hrpc.Manager{
-  Decoder: func(r *http.Request, dst interface{}) error {
-    return json.NewDecoder(r.Body).Decode(dst)
-  },
-  Encoder: func(w http.ResponseWriter, r *http.Request, res interface{}) {
-    w.Header().Set("Content-Type", "application/json; charset=utf-8")
-    json.NewEncoder(w).Encode(res)
-  },
-  ErrorEncoder: func(w http.ResponseWriter, r *http.Request, err error) {
-    res := &struct {
-      Error string `json:"error"`
-    }{err.Error()}
-    w.Header().Set("Content-Type", "application/json; charset=utf-8")
-    w.WriteHeader(http.StatusInternalServerError)
-    json.NewEncoder(w).Encode(res)
-  },
-  Validate: true,
+	Decoder: func(r *http.Request, dst interface{}) error {
+		return json.NewDecoder(r.Body).Decode(dst)
+	},
+	Encoder: func(w http.ResponseWriter, r *http.Request, res interface{}) {
+		w.Header().Set("Content-Type", "application/json; charset=utf-8")
+		json.NewEncoder(w).Encode(res)
+	},
+	ErrorEncoder: func(w http.ResponseWriter, r *http.Request, err error) {
+		res := &struct {
+			Error string `json:"error"`
+		}{err.Error()}
+		w.Header().Set("Content-Type", "application/json; charset=utf-8")
+		w.WriteHeader(http.StatusInternalServerError)
+		json.NewEncoder(w).Encode(res)
+	},
+	Validate: true,
 }
 ```
 
@@ -52,7 +52,7 @@ m := hrpc.Manager{
 
 ```go
 type UserRequest struct {
-  ID int `json:"id"`
+	ID int `json:"id"`
 }
 
 func (req *UserRequest) Valid() error {
@@ -64,12 +64,19 @@ func (req *UserRequest) Valid() error {
 }
 
 type UserResponse struct {
-  ID int `json:"id"`
-  Username string `json:"username"`
+	ID int `json:"id"`
+	Username string `json:"username"`
 }
 
 http.Handle("/user.get", m.Handler(func(ctx context.Context, req *UserRequest) (*UserResponse, error) {
-  return &UserResponse{ID: 1, Username: "acoshift"}, nil
+	return &UserResponse{ID: 1, Username: "acoshift"}, nil
+}))
+
+// or use non-ptr struct
+http.Handle("/user.get2", m.Handler(func(ctx context.Context, req UserRequest) (res UserResponse, err error) {
+	res.ID = 1
+	res.Username = "acoshift"
+	return
 }))
 ```
 
@@ -77,7 +84,7 @@ http.Handle("/user.get", m.Handler(func(ctx context.Context, req *UserRequest) (
 
 ```go
 m.Handler(func(ctx context.Context, in *UserRequest, opts ...grpc.CallOption) (*UserResponse, error) {
-  return nil, errors.New("not implemented")
+	return nil, errors.New("not implemented")
 })
 ```
 
@@ -85,13 +92,13 @@ m.Handler(func(ctx context.Context, in *UserRequest, opts ...grpc.CallOption) (*
 
 ```go
 m.Handler(func(r *http.Request) error {
-  buf := &bytes.Buffer{}
-  _, err := io.Copy(buf, r.Body)
-  if err != nil {
-    return err
-  }
-  fmt.Printf("upload data: %s\n", buf.String())
-  return nil
+	buf := &bytes.Buffer{}
+	_, err := io.Copy(buf, r.Body)
+	if err != nil {
+		return err
+	}
+	fmt.Printf("upload data: %s\n", buf.String())
+	return nil
 })
 
 m.Handler(func(w http.ResponseWriter, r *http.Request) {})
