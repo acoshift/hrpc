@@ -143,6 +143,21 @@ func TestHandler(t *testing.T) {
 	reset()
 	h.ServeHTTP(w, r)
 	mustSuccess()
+
+	// non-pointer struct request and response
+	h = m.Handler(func(req requestType) (res struct {
+		OK string `json:"ok"`
+	}, err error) {
+		if req.Data != 1 {
+			t.Fatalf("invalid data")
+		}
+		res.OK = "1"
+		return
+	})
+	r = httptest.NewRequest(http.MethodPost, "http://localhost", successBody)
+	reset()
+	h.ServeHTTP(w, r)
+	mustSuccess()
 }
 
 func TestDefault(t *testing.T) {
