@@ -122,11 +122,15 @@ func (m *Manager) Handler(f interface{}) http.Handler {
 		}
 	}
 
-	var typ reflect.Type
+	var (
+		infType reflect.Type
+		infPtr  bool
+	)
 	if i, ok := mapIn[miInterface]; ok {
-		typ = ft.In(i)
-		if typ.Kind() == reflect.Ptr {
-			typ = typ.Elem()
+		infType = ft.In(i)
+		if infType.Kind() == reflect.Ptr {
+			infType = infType.Elem()
+			infPtr = true
 		}
 	}
 
@@ -142,7 +146,7 @@ func (m *Manager) Handler(f interface{}) http.Handler {
 		}
 		// inject request interface
 		if i, ok := mapIn[miInterface]; ok {
-			rfReq := reflect.New(typ)
+			rfReq := reflect.New(infType)
 			req := rfReq.Interface()
 			err := decoder(r, req)
 			if err != nil {
@@ -159,7 +163,11 @@ func (m *Manager) Handler(f interface{}) http.Handler {
 					}
 				}
 			}
-			vIn[i] = rfReq
+			if infPtr {
+				vIn[i] = rfReq
+			} else {
+				vIn[i] = rfReq.Elem()
+			}
 		}
 		// inject request
 		if i, ok := mapIn[miRequest]; ok {
