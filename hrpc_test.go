@@ -12,7 +12,7 @@ import (
 	"testing"
 )
 
-func jsonDecoder(r *http.Request, dst interface{}) error {
+func jsonDecoder(r *http.Request, dst any) error {
 	return json.NewDecoder(r.Body).Decode(dst)
 }
 
@@ -50,7 +50,7 @@ func TestHandler(t *testing.T) {
 
 	m := Manager{
 		Decoder: jsonDecoder,
-		Encoder: func(w http.ResponseWriter, r *http.Request, res interface{}) {
+		Encoder: func(w http.ResponseWriter, r *http.Request, res any) {
 			callSuccess = true
 		},
 		ErrorEncoder: func(w http.ResponseWriter, r *http.Request, err error) {
@@ -59,7 +59,7 @@ func TestHandler(t *testing.T) {
 		Validate: true,
 	}
 
-	h := m.Handler(func(ctx context.Context, req *requestType) (interface{}, error) {
+	h := m.Handler(func(ctx context.Context, req *requestType) (any, error) {
 		if req.Data != 1 {
 			t.Fatalf("invalid data")
 		}
@@ -113,7 +113,7 @@ func TestHandler(t *testing.T) {
 	h.ServeHTTP(w, r)
 	mustError()
 
-	h = m.Handler(func(ctx context.Context, req *requestType) (interface{}, error) {
+	h = m.Handler(func(ctx context.Context, req *requestType) (any, error) {
 		return nil, errors.New("some error")
 	})
 	r = httptest.NewRequest(http.MethodPost, "http://localhost", successBody)
@@ -121,7 +121,7 @@ func TestHandler(t *testing.T) {
 	h.ServeHTTP(w, r)
 	mustError()
 
-	h = m.Handler(func(r *http.Request, req *requestType) (interface{}, error) {
+	h = m.Handler(func(r *http.Request, req *requestType) (any, error) {
 		return map[string]int{"ok": 1}, nil
 	})
 	r = httptest.NewRequest(http.MethodPost, "http://localhost", successBody)
@@ -136,7 +136,7 @@ func TestHandler(t *testing.T) {
 	mustNothing()
 
 	// grpc style
-	h = m.Handler(func(ctx context.Context, req *requestType, opts ...interface{}) (interface{}, error) {
+	h = m.Handler(func(ctx context.Context, req *requestType, opts ...any) (any, error) {
 		return map[string]string{"ok": "1"}, nil
 	})
 	r = httptest.NewRequest(http.MethodPost, "http://localhost", successBody)
@@ -163,7 +163,7 @@ func TestHandler(t *testing.T) {
 func TestDefault(t *testing.T) {
 	m := Manager{}
 	i := 0
-	h := m.Handler(func(ctx context.Context, req *requestType) (interface{}, error) {
+	h := m.Handler(func(ctx context.Context, req *requestType) (any, error) {
 		if i == 0 {
 			i++
 			return req, nil
@@ -193,13 +193,13 @@ func TestInvalidF(t *testing.T) {
 	}()
 	func() {
 		defer p()
-		m.Handler(func(ctx interface{}, req interface{}) (interface{}, error) {
+		m.Handler(func(ctx any, req any) (any, error) {
 			return nil, nil
 		})
 	}()
 	func() {
 		defer p()
-		m.Handler(func(ctx context.Context, req interface{}) (interface{}, interface{}) {
+		m.Handler(func(ctx context.Context, req any) (any, any) {
 			return nil, nil
 		})
 	}()
@@ -207,10 +207,10 @@ func TestInvalidF(t *testing.T) {
 
 func ExampleManager() {
 	m := Manager{
-		Decoder: func(r *http.Request, dst interface{}) error {
+		Decoder: func(r *http.Request, dst any) error {
 			return json.NewDecoder(r.Body).Decode(dst)
 		},
-		Encoder: func(w http.ResponseWriter, r *http.Request, res interface{}) {
+		Encoder: func(w http.ResponseWriter, r *http.Request, res any) {
 			w.Header().Set("Content-Type", "application/json; charset=utf-8")
 			json.NewEncoder(w).Encode(res)
 		},
