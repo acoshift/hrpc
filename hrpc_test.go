@@ -32,6 +32,8 @@ func TestHandler(t *testing.T) {
 	successBody := &bytes.Buffer{}
 	errorBody := &bytes.Buffer{}
 	invalidBody := &bytes.Buffer{}
+	onErrorCalled := false
+	onOKCalled := false
 
 	var r *http.Request
 	var w *httptest.ResponseRecorder
@@ -45,6 +47,8 @@ func TestHandler(t *testing.T) {
 		errorBody.WriteString("{\"data\": -1}")
 		invalidBody.Reset()
 		invalidBody.WriteString("invalid")
+		onOKCalled = false
+		onErrorCalled = false
 		w = httptest.NewRecorder()
 	}
 
@@ -58,6 +62,12 @@ func TestHandler(t *testing.T) {
 		},
 		Validate: true,
 	}
+	m.OnOK(func(w http.ResponseWriter, r *http.Request, req any, res any) {
+		onOKCalled = true
+	})
+	m.OnError(func(w http.ResponseWriter, r *http.Request, req any, err error) {
+		onErrorCalled = true
+	})
 
 	h := m.Handler(func(ctx context.Context, req *requestType) (any, error) {
 		if req.Data != 1 {
@@ -70,8 +80,14 @@ func TestHandler(t *testing.T) {
 		if !callSuccess {
 			t.Fatalf("success not call")
 		}
+		if !onOKCalled {
+			t.Fatalf("onOK not call")
+		}
 		if callError {
 			t.Fatalf("error should not be called")
+		}
+		if onErrorCalled {
+			t.Fatalf("onError should not be called")
 		}
 	}
 
@@ -79,8 +95,14 @@ func TestHandler(t *testing.T) {
 		if callSuccess {
 			t.Fatalf("success should not be called")
 		}
+		if onOKCalled {
+			t.Fatalf("onOK should not be called")
+		}
 		if !callError {
 			t.Fatalf("error not call")
+		}
+		if !onErrorCalled {
+			t.Fatalf("onError not call")
 		}
 	}
 
