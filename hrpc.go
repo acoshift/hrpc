@@ -20,6 +20,8 @@ type Manager struct {
 	Encoder      Encoder
 	ErrorEncoder ErrorEncoder
 	Validate     bool // set to true to validate request after decode using Validatable interface
+	onErrorFuncs []func(http.ResponseWriter, *http.Request, any, error)
+	onOKFuncs    []func(http.ResponseWriter, *http.Request, any, any)
 }
 
 func (m *Manager) decoder() Decoder {
@@ -41,6 +43,16 @@ func (m *Manager) errorEncoder() ErrorEncoder {
 		return func(http.ResponseWriter, *http.Request, error) {}
 	}
 	return m.ErrorEncoder
+}
+
+// OnError calls f when error
+func (m *Manager) OnError(f func(w http.ResponseWriter, r *http.Request, req any, err error)) {
+	m.onErrorFuncs = append(m.onErrorFuncs, f)
+}
+
+// OnOK calls f before encode ok response
+func (m *Manager) OnOK(f func(w http.ResponseWriter, r *http.Request, req any, res any)) {
+	m.onOKFuncs = append(m.onOKFuncs, f)
 }
 
 // Validatable interface
@@ -71,6 +83,14 @@ func setOrPanic(m map[mapIndex]int, k mapIndex, v int) {
 		panic("hrpc: duplicate input type")
 	}
 	m[k] = v
+}
+
+func (m *Manager) encodeAndHookError(w http.ResponseWriter, r *http.Request, req any, err error) {
+	m.errorEncoder()(w, r, err)
+
+	for _, f := range m.onErrorFuncs {
+		f(w, r, req, err)
+	}
 }
 
 // Handler func,
@@ -136,9 +156,13 @@ func (m *Manager) Handler(f any) http.Handler {
 
 	encoder := m.encoder()
 	decoder := m.decoder()
-	errorEncoder := m.errorEncoder()
 
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		var (
+			req any
+			res any
+		)
+
 		vIn := make([]reflect.Value, numIn)
 		// inject context
 		if i, ok := mapIn[miContext]; ok {
@@ -147,10 +171,10 @@ func (m *Manager) Handler(f any) http.Handler {
 		// inject request interface
 		if i, ok := mapIn[miAny]; ok {
 			rfReq := reflect.New(infType)
-			req := rfReq.Interface()
+			req = rfReq.Interface()
 			err := decoder(r, req)
 			if err != nil {
-				errorEncoder(w, r, err)
+				m.encodeAndHookError(w, r, req, err)
 				return
 			}
 
@@ -158,7 +182,7 @@ func (m *Manager) Handler(f any) http.Handler {
 				if req, ok := req.(Validatable); ok {
 					err = req.Valid()
 					if err != nil {
-						errorEncoder(w, r, err)
+						m.encodeAndHookError(w, r, req, err)
 						return
 					}
 				}
@@ -183,16 +207,21 @@ func (m *Manager) Handler(f any) http.Handler {
 		if i, ok := mapOut[miError]; ok {
 			if vErr := vOut[i]; !vErr.IsNil() {
 				if err, ok := vErr.Interface().(error); ok && err != nil {
-					errorEncoder(w, r, err)
+					m.encodeAndHookError(w, r, req, err)
 					return
 				}
 			}
 		}
+
 		// check response
 		if i, ok := mapOut[miAny]; ok {
-			encoder(w, r, vOut[i].Interface())
+			res = vOut[i].Interface()
+			encoder(w, r, res)
 		}
 
-		// if f is not return response, it may already call from native response writer
+		// run ok hooks
+		for _, f := range m.onOKFuncs {
+			f(w, r, req, res)
+		}
 	})
 }
