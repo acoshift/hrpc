@@ -12,11 +12,11 @@ Convert RPC style function into http.Handler
 - context.Context
 - *http.Request
 - http.ResponseWriter
-- interface{}
+- any
 
 ## Support output types
 
-- interface{}
+- any
 - error
 
 ## Usage
@@ -29,10 +29,10 @@ import "github.com/acoshift/hrpc/v3"
 
 ```go
 m := hrpc.Manager{
-	Decoder: func(r *http.Request, dst interface{}) error {
+	Decoder: func(r *http.Request, dst any) error {
 		return json.NewDecoder(r.Body).Decode(dst)
 	},
-	Encoder: func(w http.ResponseWriter, r *http.Request, res interface{}) {
+	Encoder: func(w http.ResponseWriter, r *http.Request, res any) {
 		w.Header().Set("Content-Type", "application/json; charset=utf-8")
 		json.NewEncoder(w).Encode(res)
 	},

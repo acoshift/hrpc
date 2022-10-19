@@ -6,10 +6,10 @@ import (
 )
 
 // Decoder is the request decoder
-type Decoder func(*http.Request, interface{}) error
+type Decoder func(*http.Request, any) error
 
 // Encoder is the response encoder
-type Encoder func(http.ResponseWriter, *http.Request, interface{})
+type Encoder func(http.ResponseWriter, *http.Request, any)
 
 // ErrorEncoder is the error response encoder
 type ErrorEncoder func(http.ResponseWriter, *http.Request, error)
@@ -24,14 +24,14 @@ type Manager struct {
 
 func (m *Manager) decoder() Decoder {
 	if m.Decoder == nil {
-		return func(*http.Request, interface{}) error { return nil }
+		return func(*http.Request, any) error { return nil }
 	}
 	return m.Decoder
 }
 
 func (m *Manager) encoder() Encoder {
 	if m.Encoder == nil {
-		return func(http.ResponseWriter, *http.Request, interface{}) {}
+		return func(http.ResponseWriter, *http.Request, any) {}
 	}
 	return m.Encoder
 }
@@ -55,7 +55,7 @@ const (
 	miContext                 // context.Context
 	miRequest                 // *http.Request
 	miResponseWriter          // http.ResponseWriter
-	miInterface               // interface{}
+	miAny                     // any
 	miError                   // error
 )
 
@@ -79,7 +79,7 @@ func setOrPanic(m map[mapIndex]int, k mapIndex, v int) {
 // second input can be anything which will pass to RequestDecoder function.
 // first output must be the result which will pass to success handler.
 // second output must be an error interface which will pass to error handler if not nil.
-func (m *Manager) Handler(f interface{}) http.Handler {
+func (m *Manager) Handler(f any) http.Handler {
 	fv := reflect.ValueOf(f)
 	ft := fv.Type()
 	if ft.Kind() != reflect.Func {
@@ -106,7 +106,7 @@ func (m *Manager) Handler(f interface{}) http.Handler {
 		case strResponseWriter:
 			setOrPanic(mapIn, miResponseWriter, i)
 		default:
-			setOrPanic(mapIn, miInterface, i)
+			setOrPanic(mapIn, miAny, i)
 		}
 	}
 
@@ -118,7 +118,7 @@ func (m *Manager) Handler(f interface{}) http.Handler {
 		case strError:
 			setOrPanic(mapOut, miError, i)
 		default:
-			setOrPanic(mapOut, miInterface, i)
+			setOrPanic(mapOut, miAny, i)
 		}
 	}
 
@@ -126,7 +126,7 @@ func (m *Manager) Handler(f interface{}) http.Handler {
 		infType reflect.Type
 		infPtr  bool
 	)
-	if i, ok := mapIn[miInterface]; ok {
+	if i, ok := mapIn[miAny]; ok {
 		infType = ft.In(i)
 		if infType.Kind() == reflect.Ptr {
 			infType = infType.Elem()
@@ -145,7 +145,7 @@ func (m *Manager) Handler(f interface{}) http.Handler {
 			vIn[i] = reflect.ValueOf(r.Context())
 		}
 		// inject request interface
-		if i, ok := mapIn[miInterface]; ok {
+		if i, ok := mapIn[miAny]; ok {
 			rfReq := reflect.New(infType)
 			req := rfReq.Interface()
 			err := decoder(r, req)
@@ -189,7 +189,7 @@ func (m *Manager) Handler(f interface{}) http.Handler {
 			}
 		}
 		// check response
-		if i, ok := mapOut[miInterface]; ok {
+		if i, ok := mapOut[miAny]; ok {
 			encoder(w, r, vOut[i].Interface())
 		}
 
